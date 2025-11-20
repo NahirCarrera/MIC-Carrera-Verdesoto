@@ -1,249 +1,214 @@
-import keyboard
-from PIL import ImageGrab, Image
-import os
-from datetime import datetime
 import tkinter as tk
+from PIL import ImageGrab, ImageTk
+import pyautogui
+import ctypes
 import time
-import json
-import ctypes 
-import random
+import keyboard 
+import json  # <--- NUEVO: Para guardar el archivo
 
 # ==========================================
-#  FIX DE ESCALADO (DPI AWARE)
+#  CONFIGURACIÓN INICIAL
+# ==========================================
+SCREEN_BOX_SIZE = 400  # Tamaño del cuadro rojo
+
+# ==========================================
+#  FIX DPI
 # ==========================================
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
+except:
     try: ctypes.windll.user32.SetProcessDPIAware()
     except: pass
 
-# ==========================================
-#  CONFIGURACIÓN
-# ==========================================
+class MasterConfigurator:
+    def __init__(self, root):
+        self.root = root
+        self.root.overrideredirect(True)
+        self.root.wm_attributes("-topmost", True)
+        
+        # Estado
+        self.is_locked = False
+        self.rect_id = None
+        self.final_yellow_coords = None
+        self.fixed_left = 0
+        self.fixed_top = 0
 
-FIXED_LEFT = 1010  
-FIXED_TOP = 244    
-MAX_SHAKE = 31      
-SCREEN_BOX_SIZE = 400  
+        # --- FASE 1: SEGUIMIENTO DEL MOUSE ---
+        self.root.wm_attributes("-alpha", 0.6)
+        self.root.config(bg="grey")
+        self.root.wm_attributes("-transparentcolor", "grey")
+        
+        self.frame = tk.Frame(root, bg="grey", highlightthickness=4, highlightbackground="red")
+        self.frame.pack(fill="both", expand=True)
+        
+        self.label = tk.Label(self.frame, text="UBICA Y PRESIONA ENTER (Q para Salir)", 
+                              bg="red", fg="white", font=("Arial", 10, "bold"))
+        self.label.pack(pady=10)
 
-# TUS BANDEJAS MANUALES (Base 320px)
-MANUAL_TRAYS = [
-    [17, 96, 54, 158], [60, 95, 100, 159], [104, 91, 135, 158], 
-    [139, 90, 173, 123], [138, 126, 171, 158], [176, 89, 211, 112], 
-    [175, 113, 209, 134], [174, 134, 206, 158], [254, 90, 311, 160]
-]
+        # INICIAR BUCLE DE ESCUCHA
+        self.update_position_loop()
 
-OUTPUT_SIZE = 640
+    def exit_app(self):
+        print("Saliendo...")
+        self.root.destroy()
+        exit()
 
-# CARPETAS
-IMG_FOLDER = "capturas_yolo"
-LABEL_FOLDER = "coordenadas_yolo"
-CONFIG_FILE = "config_bandejas.json"
-CLASS_ID = 0 
-
-# Teclas
-HOTKEY_CAPTURE = "alt+1"  # <--- AHORA CAPTURA DE UNA VEZ
-HOTKEY_ADJUST = "alt+2"   # Ajustar Centro (WASD)
-HOTKEY_EXIT = "alt+esc"
-MOVE_STEP = 2 
-# ---------------------
-
-# Variables Globales
-overlay_window = None 
-overlay_canvas = None 
-is_adjust_mode = False       
-wasd_hooks = []             
-
-def get_trays_data():
-    if os.path.exists(CONFIG_FILE):
+    def update_position_loop(self):
+        if self.is_locked: 
+            return
+        
+        # 1. CHEQUEO DE TECLAS (Fase 1)
+        if keyboard.is_pressed('q'):
+            self.exit_app()
+            return
+        
+        if keyboard.is_pressed('enter'):
+            time.sleep(0.2)
+            self.lock_position()
+            return
+        
+        # 2. MOVER VENTANA
         try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f), True
+            x, y = pyautogui.position()
+            self.fixed_left = x - (SCREEN_BOX_SIZE // 2)
+            self.fixed_top = y - (SCREEN_BOX_SIZE // 2)
+            self.root.geometry(f"{SCREEN_BOX_SIZE}x{SCREEN_BOX_SIZE}+{self.fixed_left}+{self.fixed_top}")
         except: pass
-    return MANUAL_TRAYS, False
-
-def setup_overlay(window):
-    global overlay_canvas
-    window.overrideredirect(True)
-    window.wm_attributes("-topmost", True)
-    window.wm_attributes("-alpha", 0.5) # Un poco más visible para el flash
-    
-    # Posición inicial
-    window.geometry(f"{SCREEN_BOX_SIZE}x{SCREEN_BOX_SIZE}+{FIXED_LEFT}+{FIXED_TOP}")
-    
-    overlay_canvas = tk.Canvas(window, width=SCREEN_BOX_SIZE, height=SCREEN_BOX_SIZE, 
-                               bg="cyan", highlightthickness=3, highlightbackground="cyan")
-    overlay_canvas.pack(fill="both", expand=True)
-    
-    # Zona segura (Opcional, visual)
-    safe = MAX_SHAKE
-    overlay_canvas.create_rectangle(safe, safe, SCREEN_BOX_SIZE-safe, SCREEN_BOX_SIZE-safe, 
-                                    outline="yellow", dash=(4,4), tags="safe_zone")
-    
-    draw_green_boxes(0, 0)
-    window.withdraw()
-
-def draw_green_boxes(offset_x, offset_y):
-    overlay_canvas.delete("all_boxes")
-    trays, from_json = get_trays_data()
-    
-    if from_json: scale_factor = 1.0 
-    else: scale_factor = SCREEN_BOX_SIZE / 320.0 
-
-    for coords in trays:
-        x1, y1, x2, y2 = coords
-        sx1, sy1 = int(x1 * scale_factor), int(y1 * scale_factor)
-        sx2, sy2 = int(x2 * scale_factor), int(y2 * scale_factor)
         
-        # Efecto Anclaje: Si la ventana se mueve (+), las cajas se mueven (-)
-        draw_x1 = sx1 - offset_x
-        draw_y1 = sy1 - offset_y
-        draw_x2 = sx2 - offset_x
-        draw_y2 = sy2 - offset_y
+        self.root.after(10, self.update_position_loop)
+
+    # --- TRANSICIÓN A FASE 2 ---
+    def lock_position(self):
+        self.is_locked = True
+        print("Posición fijada. Preparando captura...")
         
-        overlay_canvas.create_rectangle(draw_x1, draw_y1, draw_x2, draw_y2, 
-                                        outline="#00FF00", width=2, tags="all_boxes")
+        # 1. Ocultar
+        self.root.withdraw()
+        time.sleep(0.2) 
+        
+        # 2. Capturar fondo
+        bbox = (self.fixed_left, self.fixed_top, 
+                self.fixed_left + SCREEN_BOX_SIZE, 
+                self.fixed_top + SCREEN_BOX_SIZE)
+        self.bg_image = ImageGrab.grab(bbox=bbox, all_screens=True)
+        self.photo = ImageTk.PhotoImage(self.bg_image)
+        
+        # 3. Reaparecer
+        self.frame.destroy()
+        self.root.deiconify()
+        self.root.wm_attributes("-transparentcolor", "")
+        self.root.config(bg="white")
+        
+        # 4. Canvas de Dibujo
+        self.canvas = tk.Canvas(self.root, width=SCREEN_BOX_SIZE, height=SCREEN_BOX_SIZE, 
+                                cursor="cross", highlightthickness=4, highlightbackground="red")
+        self.canvas.pack(fill="both", expand=True)
+        
+        self.canvas.create_image(0, 0, image=self.photo, anchor="nw")
+        
+        self.canvas.create_text(SCREEN_BOX_SIZE/2, 20, 
+                                text="DIBUJA ZONA AMARILLA Y PULSA ENTER", 
+                                fill="yellow", font=("Arial", 8, "bold"))
+        self.canvas.create_text(SCREEN_BOX_SIZE/2, 35, 
+                                text="(Presiona 'Z' para borrar)", 
+                                fill="white", font=("Arial", 7))
 
-def refresh_position(x, y):
-    if overlay_window:
-        overlay_window.geometry(f"{SCREEN_BOX_SIZE}x{SCREEN_BOX_SIZE}+{x}+{y}")
+        # Binds Mouse (Tkinter)
+        self.canvas.bind("<ButtonPress-1>", self.on_press)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_release)
+        
+        # Loop Teclado Fase 2
+        self.wait_for_final_enter()
 
-# --- WASD CENTRO ---
-def move_center(dx, dy):
-    global FIXED_LEFT, FIXED_TOP
-    FIXED_LEFT += dx
-    FIXED_TOP += dy
-    refresh_position(FIXED_LEFT, FIXED_TOP)
+    def wait_for_final_enter(self):
+        if keyboard.is_pressed('q'):
+            self.exit_app()
+            return
 
-def hook_wasd():
-    wasd_hooks.append(keyboard.add_hotkey('w', lambda: move_center(0, -MOVE_STEP), suppress=True))
-    wasd_hooks.append(keyboard.add_hotkey('s', lambda: move_center(0, MOVE_STEP), suppress=True))
-    wasd_hooks.append(keyboard.add_hotkey('a', lambda: move_center(-MOVE_STEP, 0), suppress=True))
-    wasd_hooks.append(keyboard.add_hotkey('d', lambda: move_center(MOVE_STEP, 0), suppress=True))
+        if keyboard.is_pressed('enter'):
+            time.sleep(0.2)
+            self.calculate_and_exit()
+            return
+        
+        # --- NUEVO: BORRAR CON Z ---
+        if keyboard.is_pressed('z'):
+            time.sleep(0.2) # Evitar rebotes
+            self.undo_selection()
 
-def unhook_wasd():
-    global wasd_hooks
-    for h in wasd_hooks:
-        try: keyboard.remove_hotkey(h)
-        except: pass
-    wasd_hooks = []
-
-def toggle_adjust_mode():
-    global is_adjust_mode
-    is_adjust_mode = not is_adjust_mode
+        self.root.after(50, self.wait_for_final_enter)
     
-    if is_adjust_mode:
-        print("--- MODO AJUSTE (WASD) ---")
-        refresh_position(FIXED_LEFT, FIXED_TOP)
-        draw_green_boxes(0, 0)
-        overlay_window.deiconify()
-        overlay_canvas.config(bg="yellow", highlightbackground="yellow")
-        hook_wasd()
-    else:
-        print(f"--- CENTRO FIJADO ---")
-        overlay_window.withdraw() # Ocultar al terminar ajuste
-        unhook_wasd()
+    def undo_selection(self):
+        """Borra el cuadro amarillo actual para permitir redibujar"""
+        if self.rect_id:
+            self.canvas.delete(self.rect_id)
+            self.rect_id = None
+            self.final_yellow_coords = None
+            print("-> Cuadro borrado. Puedes dibujar de nuevo.")
 
-def generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y):
-    path = os.path.join(LABEL_FOLDER, filename_base + ".txt")
-    base_w, base_h = float(SCREEN_BOX_SIZE), float(SCREEN_BOX_SIZE)
-    scale_factor = 1.0 if from_json else (SCREEN_BOX_SIZE / 320.0)
-    
-    with open(path, 'w') as f:
-        for coords in trays:
-            x1, y1, x2, y2 = coords
-            sx1, sy1 = x1 * scale_factor, y1 * scale_factor
-            sx2, sy2 = x2 * scale_factor, y2 * scale_factor
+    # --- LOGICA DIBUJO ---
+    def on_press(self, event):
+        self.start_x = event.x
+        self.start_y = event.y
+        if self.rect_id: self.canvas.delete(self.rect_id)
+        self.rect_id = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, 
+                                                    outline="yellow", width=2, dash=(4,4))
+
+    def on_drag(self, event):
+        self.canvas.coords(self.rect_id, self.start_x, self.start_y, event.x, event.y)
+
+    def on_release(self, event):
+        x1, x2 = sorted([self.start_x, event.x])
+        y1, y2 = sorted([self.start_y, event.y])
+        self.final_yellow_coords = (x1, y1, x2, y2)
+
+    # --- GUARDADO JSON ---
+    def calculate_and_exit(self):
+        if not self.final_yellow_coords:
+            print("¡Dibuja primero el cuadro amarillo con el mouse!")
+            return
+
+        yx1, yy1, yx2, yy2 = self.final_yellow_coords
+        
+        margin_left = yx1
+        margin_top = yy1
+        margin_right = SCREEN_BOX_SIZE - yx2
+        margin_bottom = SCREEN_BOX_SIZE - yy2
+        
+        max_shake = int(min(margin_left, margin_top, margin_right, margin_bottom))
+
+        # --- CREAR DICCIONARIO DE DATOS ---
+        config_data = {
+            "FIXED_LEFT": self.fixed_left,
+            "FIXED_TOP": self.fixed_top,
+            "MAX_SHAKE": max_shake,
+            "SCREEN_BOX_SIZE": SCREEN_BOX_SIZE
+        }
+
+        # --- GUARDAR EN JSON ---
+        filename = "coordinates_config.json"
+        try:
+            with open(filename, "w") as f:
+                json.dump(config_data, f, indent=4)
             
-            final_x1 = max(0, sx1 - shift_x)
-            final_y1 = max(0, sy1 - shift_y)
-            final_x2 = min(base_w, sx2 - shift_x)
-            final_y2 = min(base_h, sy2 - shift_y)
+            print("\n" + "="*50)
+            print(f"¡EXITO! Configuración guardada en '{filename}'")
+            print("-" * 30)
+            print(json.dumps(config_data, indent=4))
+            print("="*50 + "\n")
             
-            if final_x2 <= final_x1 or final_y2 <= final_y1: continue 
-
-            w, h = final_x2 - final_x1, final_y2 - final_y1
-            cx, cy = final_x1 + (w / 2), final_y1 + (h / 2)
-            f.write(f"{CLASS_ID} {cx/base_w:.6f} {cy/base_h:.6f} {w/base_w:.6f} {h/base_h:.6f}\n")
-
-def take_capture():
-    if is_adjust_mode: return 
-
-    try:
-        os.makedirs(IMG_FOLDER, exist_ok=True)
-        os.makedirs(LABEL_FOLDER, exist_ok=True)
+        except Exception as e:
+            print(f"Error al guardar JSON: {e}")
         
-        # 1. GENERAR POSICIÓN ALEATORIA
-        shift_x = random.randint(-MAX_SHAKE, MAX_SHAKE)
-        shift_y = random.randint(-MAX_SHAKE, MAX_SHAKE)
-        
-        temp_left = FIXED_LEFT + shift_x
-        temp_top = FIXED_TOP + shift_y
-        
-        # 2. FEEDBACK VISUAL (FLASH)
-        # Mostramos dónde va a ser la captura por 0.15 segundos
-        refresh_position(temp_left, temp_top)
-        draw_green_boxes(shift_x, shift_y)
-        
-        overlay_canvas.config(bg="cyan", highlightbackground="cyan") # Flash Azul
-        overlay_window.deiconify()
-        overlay_window.update()
-        time.sleep(0.15) 
-        
-        # 3. OCULTAR
-        overlay_window.withdraw()
-        time.sleep(0.1) # Esperar a que desaparezca del todo
-        
-        # 4. CAPTURAR
-        bbox = (temp_left, temp_top, temp_left + SCREEN_BOX_SIZE, temp_top + SCREEN_BOX_SIZE)
-        img = ImageGrab.grab(bbox=bbox, all_screens=True)
-        img_resized = img.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.Resampling.LANCZOS)
-
-        # 5. GUARDAR
-        timestamp = datetime.now().strftime("%d%m%y%H%M%S")
-        filename_base = f"img_{timestamp}_s{shift_x}_{shift_y}"
-        
-        img_resized.save(os.path.join(IMG_FOLDER, filename_base + ".png"))
-        
-        trays, from_json = get_trays_data()
-        generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y)
-        
-        print(f"-> FOTO TOMADA: {filename_base} (Offset {shift_x},{shift_y})")
-
-    except Exception as e:
-        print(f"Error: {e}")
-        overlay_window.withdraw()
-
-def exit_program():
-    unhook_wasd()
-    keyboard.unhook_all()
-    if overlay_window: overlay_window.destroy()
-
-def main():
-    global overlay_window
-    print("--- CAPTURA RÁPIDA YOLO (ONE-SHOT) ---")
-    print(f"[{HOTKEY_CAPTURE}] CAPTURAR (Flash + Foto)")
-    print(f"[{HOTKEY_ADJUST}] AJUSTAR CENTRO (WASD)")
-    print(f"[{HOTKEY_EXIT}] SALIR")
-    
-    try:
-        overlay_window = tk.Tk()
-        setup_overlay(overlay_window)
-
-        keyboard.add_hotkey(HOTKEY_CAPTURE, take_capture, suppress=True)
-        keyboard.add_hotkey(HOTKEY_ADJUST, toggle_adjust_mode, suppress=True)
-        keyboard.add_hotkey(HOTKEY_EXIT, exit_program, suppress=True)
-
-        overlay_window.mainloop()
-
-    except KeyboardInterrupt: pass
-    finally:
-        keyboard.unhook_all()
-        if overlay_window:
-            try:
-                overlay_window.destroy()
-            except:
-                pass
+        self.root.destroy()
 
 if __name__ == "__main__":
-    main()
+    print("--- CONFIGURADOR MAESTRO (JSON) ---")
+    print("1. Mueve el mouse y presiona ENTER para fijar el recuadro ROJO.")
+    print("2. Dibuja el cuadro AMARILLO al borde de la bandeja.")
+    print("3. Presiona 'Z' si quieres borrar el cuadro amarillo.")
+    print("4. Presiona ENTER para guardar las coordenadas.")
+    print("5. Presiona 'Q' para SALIR SIN GUARDAR.")
+    root = tk.Tk()
+    app = MasterConfigurator(root)
+    root.mainloop()
