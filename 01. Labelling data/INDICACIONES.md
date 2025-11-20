@@ -1,18 +1,15 @@
 # Generador de Datasets Automático (YOLO)
 
-Este conjunto de herramientas permite automatizar la creación de datasets para entrenamiento de modelos YOLO, gestionando desde la definición de coordenadas hasta la validación de etiquetas.
-
----
 
 ## Instrucciones de Uso
 
 ### PASO 1: Configuración de Coordenadas
 **Archivo:** `coordinates.py`
 
-Este script define el área de la pantalla (juego o aplicación) y calcula el margen de movimiento permitido (*shake*) para la generación de datos.
+Este script define el área de la pantalla y calcula el margen de movimiento permitido (*shake*) para la generación de datos.
 
 1. **Ejecuta el script:** Aparecerá un marco **ROJO** siguiendo al cursor.
-2. Mueve el mouse al centro de tu área de juego y presiona **`ENTER`**.
+2. Mueve el mouse al centro del área a capturar y presiona **`ENTER`**.
    * Esto fija la zona de captura principal (Cuadro Rojo).
 3. **Dibuja el "Cuadro Amarillo":**
    * Haz clic y arrastra desde el borde del objeto hacia adentro.
@@ -31,7 +28,7 @@ Este script define el área de la pantalla (juego o aplicación) y calcula el ma
 Define dónde están los objetos (bandejas, ingredientes, items) dentro de la zona capturada.
 
 1. Ejecuta el script (iniciará oculto).
-2. Pon tu juego o aplicación en primer plano.
+2. Pon la aplicación en primer plano.
 3. Presiona **`ALT` + `1`**.
    * El programa tomará una captura de fondo estática y abrirá el editor.
 4. **Dibuja los objetos:**
@@ -40,7 +37,7 @@ Define dónde están los objetos (bandejas, ingredientes, items) dentro de la zo
    * **`Z`**: Deshacer el último recuadro.
    * **`S`**: Guardar la configuración.
 
-> 💾 **Resultado:** Se generará el archivo de configuración de bandejas (ej. `labelling_config.json`).
+> 💾 **Resultado:** Se generará el archivo de configuración de anotaciones (ej. `labelling_config.json`).
 
 ---
 
@@ -58,7 +55,7 @@ Este es el script principal. Utiliza las configuraciones anteriores para tomar m
 Si la ventana del juego se movió de lugar:
 1. Presiona **`ALT` + `2`** para entrar en Modo Ajuste.
 2. Usa **`W`, `A`, `S`, `D`** para recolocar el cuadro de captura.
-3. Presiona **`ALT` + `2`** nuevamente para guardar y salir.
+3. Presiona **`ALT` + `2`** nuevamente para guardar la nueva configuración.
 4. Presiona **`ALT` + `ESC`** para cerrar el programa.
 
 ---
