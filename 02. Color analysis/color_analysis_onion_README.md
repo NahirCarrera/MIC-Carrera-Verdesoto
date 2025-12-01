@@ -14,11 +14,11 @@ La solución implementada evita el uso de modelos de aprendizaje profundo (Deep 
 ---
 ### Resultados Visuales
 
-A continuación se muestra el resultado de la segmentación:
+Resultados obtenidos mediante el filtrado de banda estrecha en escala de grises (Rango 145-170):
 
 <div align="center">
   <img src="results/onion_results.png" width="700" alt="Gráfica de Resultados de Cebolla">
-  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+  <p><em>Figura 1: Aislamiento de la cebolla basado en su firma de intensidad específica.</em></p>
 </div>
 ## 2. Metodología
 

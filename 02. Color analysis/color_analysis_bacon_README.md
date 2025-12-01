@@ -12,11 +12,11 @@ El presente documento detalla la metodología algorítmica para la cuantificaci�
 ---
 ### Resultados Visuales
 
-A continuación se muestra el resultado de la segmentación:
+A continuación se presentan los resultados de la segmentación mediante aritmética de canales (R-G) y fusión con máscara oscura HSV:
 
 <div align="center">
   <img src="results/bacon_results.png" width="700" alt="Gráfica de Resultados de Tocino">
-  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor espectral (Dominancia Roja).</em></p>
 </div>
 
 ## 2. Metodología

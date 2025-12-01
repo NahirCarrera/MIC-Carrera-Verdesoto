@@ -12,11 +12,11 @@ El presente documento detalla la metodología algorítmica para la cuantificaci�
 ---
 ### Resultados Visuales
 
-A continuación se muestra el resultado de la segmentación:
+Visualización de la densidad de biomasa calculada mediante el índice ExG normalizado con umbral estricto:
 
 <div align="center">
   <img src="results/lettuce_results.png" width="700" alt="Gráfica de Resultados de Lechuga">
-  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+  <p><em>Figura 1: Mapa ExG donde las zonas rojas/naranjas indican alta densidad de vegetación.</em></p>
 </div>
 ## 2. Metodología
 
