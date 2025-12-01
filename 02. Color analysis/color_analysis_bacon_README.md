@@ -10,7 +10,14 @@
 El presente documento detalla la metodología algorítmica para la cuantificación de tocino. A diferencia de los vegetales claros, la proteína cárnica presenta una firma espectral distintiva en el canal rojo. La solución implementada explota la **aritmética de canales** para anular el fondo metálico (acromático) y utiliza una estrategia de **fusión de sensores virtuales** (RGB + HSV) para recuperar zonas de baja luminancia (zonas "quemadas" o muy oscuras).
 
 ---
-![Bacon Results](results\bacon_results.png)
+### Resultados Visuales
+
+A continuación se muestra el resultado de la segmentación usando el índice ExG con umbral de 150:
+
+<div align="center">
+  <img src="results/bacon_results.png" width="700" alt="Gráfica de Resultados de Tocino">
+  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+</div>
 
 ## 2. Metodología
 

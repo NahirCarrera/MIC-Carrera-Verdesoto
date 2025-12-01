@@ -10,8 +10,14 @@
 El presente documento detalla la metodología algorítmica para la cuantificación de vegetales de hoja (lechuga). Debido a la baja saturación de la variedad "Iceberg" y la alta reflectividad de las bandejas metálicas (que a menudo generan reflejos amarillo-verdosos falsos), los métodos tradicionales de color fallan. La solución implementada adopta un enfoque de **Agricultura de Precisión**, utilizando el índice **ExG (Excess Green)** combinado con una normalización dinámica para distinguir biomasa real de ruido de fondo.
 
 ---
-![Lettuce Results](results\lettuce_results.png)
+### Resultados Visuales
 
+A continuación se muestra el resultado de la segmentación usando el índice ExG con umbral de 150:
+
+<div align="center">
+  <img src="results/lettuce_results.png" width="700" alt="Gráfica de Resultados de Lechuga">
+  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+</div>
 ## 2. Metodología
 
 El desafío principal radica en que la suciedad en el metal puede tener un tono "verde limón" similar a la lechuga. Para resolver esto, el algoritmo abandona el espacio RGB tradicional en favor de un índice aritmético de contraste cromático.
