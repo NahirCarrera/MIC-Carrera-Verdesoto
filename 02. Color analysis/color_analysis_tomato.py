@@ -3,7 +3,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-def analyze_tomato_spectral(folder_path):
+def analyze_tomato_strict(folder_path):
     if not os.path.exists(folder_path):
         print("Error: Carpeta no encontrada.")
         return
@@ -19,52 +19,43 @@ def analyze_tomato_spectral(folder_path):
         img = cv2.imread(path)
         if img is None: continue
         
-        # 1. PRE-PROCESAMIENTO
-        img_blur = cv2.GaussianBlur(img, (5, 5), 0)
+        # 1. PRE-PROCESAMIENTO: Mínimo Blur
+        img_blur = cv2.GaussianBlur(img, (3, 3), 0)
         
-        # --- ESTRATEGIA: SUSTRACCIÓN DE CANALES (Estilo Bacon) ---
+        # 2. CÁLCULO ESPECTRAL (R - G)
         b, g, r = cv2.split(img_blur)
-        
-        # Física: El metal tiene R ≈ G. El tomate tiene R >> G.
-        # Restamos G a R para anular el fondo.
         diff_rg = cv2.subtract(r, g)
         
-        # Normalizamos para estirar el contraste (0 a 255)
+        # Normalizamos de 0 a 255
         norm_diff = cv2.normalize(diff_rg, None, 0, 255, cv2.NORM_MINMAX)
         
-        # Umbralización:
-        # El tomate es muy rojo, así que la diferencia es alta.
-        # Usamos 50 como corte. Lo que sea mayor a 50 es "zona roja".
-        _, mask_spectral = cv2.threshold(norm_diff, 50, 255, cv2.THRESH_BINARY)
+        # --- EL CAMBIO CRÍTICO: UMBRAL ALTO ---
+        # Antes usábamos 50, lo cual dejaba pasar el "jugo" (zona cian del heatmap).
+        # El mapa de calor JET se pone amarillo/rojo alrededor de 128.
+        # Subimos a 120 para cortar el puente.
+        strict_thresh = 120
+        _, mask_spectral = cv2.threshold(norm_diff, strict_thresh, 255, cv2.THRESH_BINARY)
 
-        # --- FILTRO DE SOLIDEZ (SATURACIÓN) ---
-        # El jugo del tomate puede pasar la prueba de color rojo, pero es pálido (baja saturación).
-        # El tomate sólido tiene color intenso.
+        # 3. FILTRO SATURACIÓN (Soporte)
         hsv = cv2.cvtColor(img_blur, cv2.COLOR_BGR2HSV)
         s_channel = hsv[:,:,1]
-        
-        # Solo aceptamos saturación > 60 (para ignorar metal sucio y jugo)
         _, mask_sat = cv2.threshold(s_channel, 60, 255, cv2.THRESH_BINARY)
 
-        # COMBINACIÓN: Debe ser ROJO (Spectral) Y INTENSO (Saturación)
         mask_combined = cv2.bitwise_and(mask_spectral, mask_sat)
 
-        # --- MORFOLOGÍA (Diferencia con Bacon) ---
-        # El tomate es húmedo y tiene brillos blancos (donde R=G=B=255).
-        # La resta R-G da 0 en los brillos, creando huecos.
-        # Usamos CLOSE para cerrar esos brillos y las semillas.
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
-        mask_closed = cv2.morphologyEx(mask_combined, cv2.MORPH_CLOSE, kernel, iterations=2)
-        
-        # Limpieza final
-        mask_final = cv2.erode(mask_closed, kernel, iterations=1)
+        # 4. MORFOLOGÍA: SOLO LIMPIEZA, NO UNIÓN
+        # Eliminamos el MORPH_CLOSE anterior porque unía las islas.
+        # Usamos MORPH_OPEN para eliminar el ruido granulado que quede.
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+        mask_final = cv2.morphologyEx(mask_combined, cv2.MORPH_OPEN, kernel, iterations=1)
 
         # Filtro de área
         contours, _ = cv2.findContours(mask_final, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         mask_filtered = np.zeros_like(mask_final)
         
         for cnt in contours:
-            if cv2.contourArea(cnt) > 50: 
+            # Filtramos cosas muy pequeñas
+            if cv2.contourArea(cnt) > 30: 
                 cv2.drawContours(mask_filtered, [cnt], -1, 255, -1)
 
         # CÁLCULO
@@ -78,7 +69,7 @@ def analyze_tomato_spectral(folder_path):
         # Dibujamos en Cyan
         cv2.drawContours(img_visual, contours_vis, -1, (255, 255, 0), 2)
         
-        # Mapa de Calor: Usamos la diferencia normalizada (R-G)
+        # Mapa de Calor
         heatmap_view = cv2.applyColorMap(norm_diff, cv2.COLORMAP_JET)
 
         state_name = filename.replace('.png', '')
@@ -99,7 +90,7 @@ def analyze_tomato_spectral(folder_path):
     rows = math.ceil(num_images / cols) 
     
     fig = plt.figure(figsize=(16, 5 * rows))
-    plt.suptitle("Tomate: Sustracción Espectral (R-G) + Saturación", fontsize=16)
+    plt.suptitle("Tomato", fontsize=16)
 
     for i in range(num_images):
         r = (i // cols); c = (i % cols)
@@ -120,4 +111,4 @@ def analyze_tomato_spectral(folder_path):
 
 if __name__ == "__main__":
     folder = r"color_analysis\tomato" 
-    analyze_tomato_spectral(folder)
+    analyze_tomato_strict(folder)
