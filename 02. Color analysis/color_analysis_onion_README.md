@@ -12,9 +12,14 @@ El presente documento describe la metodología algorítmica implementada para la
 La solución implementada evita el uso de modelos de aprendizaje profundo (Deep Learning) en favor de técnicas clásicas de **procesamiento de histograma y filtrado espacial**, optimizando el costo computacional y garantizando determinismo en los resultados.
 
 ---
+### Resultados Visuales
 
-![Onion Results](results\onion_results.png)
+A continuación se muestra el resultado de la segmentación:
 
+<div align="center">
+  <img src="results/onion_results.png" width="700" alt="Gráfica de Resultados de Cebolla">
+  <p><em>Figura 1: Comparativa entre imagen original y mapa de calor.</em></p>
+</div>
 ## 2. Metodología
 
 El flujo de procesamiento (pipeline) consta de tres etapas fundamentales basadas en la física de la formación de la imagen:
