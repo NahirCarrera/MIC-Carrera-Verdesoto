@@ -101,5 +101,5 @@ def analyze_bacon_raw_edges(folder_path):
     plt.show()
 
 if __name__ == "__main__":
-    folder = r"02. Color analysis\color_analysis\bacon" 
+    folder = r"color_analysis\bacon" 
     analyze_bacon_raw_edges(folder)

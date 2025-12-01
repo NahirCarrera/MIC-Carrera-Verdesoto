@@ -90,5 +90,5 @@ def analyze_onion_narrow_band(folder_path):
     plt.show()
 
 if __name__ == "__main__":
-    folder = r"02. Color analysis\color_analysis\onion" 
+    folder = r"color_analysis\onion" 
     analyze_onion_narrow_band(folder)

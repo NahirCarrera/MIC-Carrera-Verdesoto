@@ -13,6 +13,8 @@ La solución implementada evita el uso de modelos de aprendizaje profundo (Deep 
 
 ---
 
+![Onion Results](results\onion_results.png)
+
 ## 2. Metodología
 
 El flujo de procesamiento (pipeline) consta de tres etapas fundamentales basadas en la física de la formación de la imagen:
