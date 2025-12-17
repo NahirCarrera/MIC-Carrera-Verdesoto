@@ -108,5 +108,5 @@ def analyze_peppers_lab(folder_path):
 
 if __name__ == "__main__":
     # Ajusta la ruta a tu carpeta de pimientos
-    folder = r"color_analysis\pepper" 
+    folder = r"02. Color analysis\color_analysis\pepper" 
     analyze_peppers_lab(folder)

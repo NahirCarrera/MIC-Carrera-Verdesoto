@@ -1,0 +1,40 @@
+{
+  "pickles": {
+    "exg_threshold": 110,
+    "saturation_threshold": 40,
+    "morph_kernel_size": [3, 3],
+    "min_contour_area": 30,
+    "min_percentage": 50.0  
+  },
+  "tomato": {
+    "spectral_threshold": 120,
+    "saturation_threshold": 60,
+    "morph_kernel_size": [3, 3],
+    "min_contour_area": 30,
+    "min_percentage": 45.0
+  },
+  "pepper": {
+    "b_channel_threshold": 147,
+    "close_kernel_size": [5, 5],
+    "erode_kernel_size": [3, 3],
+    "min_contour_area": 50,
+    "min_percentage": 40.0
+  },
+  "onion": {
+    "gray_lower": 145,
+    "gray_upper": 170,
+    "min_percentage": 55.0
+  },
+  "lettuce": {
+    "exg_threshold": 150,
+    "min_contour_area": 30,
+    "min_percentage": 60.0
+  },
+  "bacon": {
+    "diff_threshold": 135,
+    "dark_hsv_lower": [0, 20, 0],
+    "dark_hsv_upper": [180, 255, 60],
+    "min_contour_area": 400,
+    "min_percentage": 50.0
+  }
+}

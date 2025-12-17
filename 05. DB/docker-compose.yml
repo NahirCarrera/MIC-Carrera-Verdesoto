@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: auditai_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: auditai_test_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: 1234
+    volumes:
+      # Persistencia de datos (para no perderlos al apagar)
+      - postgres_data:/var/lib/postgresql/data
+      
+      # MAGIA: Cargar init.sql y load.sql al iniciar
+      - ./database:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres_data:
