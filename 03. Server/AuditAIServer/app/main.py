@@ -13,4 +13,5 @@ app.include_router(api_router)
 def read_root():
     return {"mensaje": "El servidor está corriendo correctamente"}
 
-# No necesitas el bloque 'if __name__ == "__main__"' porque lo corres con uvicorn
+# No necesitas el bloque 'if __name__ == "__main__"' porque lo corres con uvicorn uvicorn app.main:app --reload
+# http://127.0.0.1:8000/docs

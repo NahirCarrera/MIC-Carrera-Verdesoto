@@ -36,5 +36,15 @@
     "dark_hsv_upper": [180, 255, 60],
     "min_contour_area": 400,
     "min_percentage": 50.0
+  },
+  "ketchup": {
+    "spectral_threshold": 18,
+    "median_blur_size": 7,
+    "min_percentage": 15.0
+  },
+  "mayo": {
+    "k_clusters": 3,
+    "gaussian_blur_size": [7, 7],
+    "min_percentage": 15.0
   }
 }

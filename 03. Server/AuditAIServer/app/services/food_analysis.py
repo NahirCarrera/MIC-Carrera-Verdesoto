@@ -23,6 +23,8 @@ class FoodColorAnalyzer:
             "onion": self._analyze_onion,
             "lettuce": self._analyze_lettuce,
             "bacon": self._analyze_bacon,
+            "ketchup": self._analyze_ketchup, # Nuevo
+            "mayo": self._analyze_mayo,
         }
 
     def _load_config(self, path):
@@ -193,3 +195,37 @@ class FoodColorAnalyzer:
             if cv2.contourArea(cnt) > cfg['min_contour_area']:
                 cv2.drawContours(mask_filtered, [cnt], -1, 255, -1)
         return self._calculate_final_percentage(mask_filtered, img.shape)
+    
+    def _analyze_ketchup(self, img):
+        cfg = self._get_config_for("ketchup")
+        
+        img_blur = cv2.medianBlur(img, cfg['median_blur_size'])
+        b, g, r = cv2.split(img_blur.astype(np.float32))
+        diff_rg = r - g
+
+        _, mask = cv2.threshold(diff_rg, cfg['spectral_threshold'], 255, cv2.THRESH_BINARY)
+        mask = mask.astype(np.uint8)
+        
+        return self._calculate_final_percentage(mask, img.shape)
+    def _analyze_mayo(self, img):
+        cfg = self._get_config_for("mayo")
+        img_blur = cv2.GaussianBlur(img, tuple(cfg['gaussian_blur_size']), 0)
+        lab = cv2.cvtColor(img_blur, cv2.COLOR_BGR2Lab)
+        pixel_values = lab.reshape((-1, 3)).astype(np.float32)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        _, labels, centers = cv2.kmeans(
+            pixel_values, 
+            cfg['k_clusters'], 
+            None, 
+            criteria, 
+            10, 
+            cv2.KMEANS_RANDOM_CENTERS
+        )
+        
+        idx_mayo = np.argmax(centers[:, 0])
+
+        labels = labels.reshape(lab.shape[:2])
+        mask = np.zeros_like(labels, dtype=np.uint8)
+        mask[labels == idx_mayo] = 255
+        
+        return self._calculate_final_percentage(mask, img.shape)

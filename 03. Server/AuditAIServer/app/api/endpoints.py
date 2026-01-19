@@ -84,3 +84,45 @@ async def analyze_food_endpoint(
     except Exception as e:
         print(f"Detailed error: {e}") 
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    
+@router.post("/quick-analyze")
+async def quick_analyze_endpoint(
+    type: str = Form(..., description="Tipo de alimento"),
+    file: UploadFile = File(..., description="Imagen a analizar"),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de análisis rápido: procesa la imagen y devuelve el resultado
+    sin guardar registros en la base de datos de inspecciones.
+    """
+    if analyzer is None:
+        raise HTTPException(status_code=500, detail="Servicio IA no disponible")
+
+    # 1. Leer y decodificar la imagen desde el archivo subido
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    img_matrix = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if img_matrix is None:
+        raise HTTPException(status_code=400, detail="Imagen inválida o corrupta")
+
+    try:
+        # 2. Ejecutar el análisis matemático basado en la configuración técnica
+        # Se requiere 'db' para consultar el umbral mínimo (min_threshold) en la tabla FoodCategory
+        result = analyzer.analyze_image_matrix(img_matrix, type, db)
+        
+        # 3. Retornar únicamente la información del análisis
+        return {
+            "status": "success",
+            "food_type": type,
+            "percentage": result["percentage"],
+            "min_threshold": result["min_threshold"], 
+            "is_incident": result["is_incident"],
+            "incident_status": result["status"]
+        }
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        print(f"Error en análisis rápido: {e}") 
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
