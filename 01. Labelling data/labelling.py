@@ -20,8 +20,36 @@ except:
 # ==========================================
 
 # Archivos
-CONFIG_FILE = "config_bandejas.json"          # Donde guardamos los recuadros
+CONFIG_FILE = "labelling_config.json"         # Donde guardamos los recuadros + clases
 COORD_CONFIG_FILE = "coordinates_config.json" # De donde leemos la posición de la ventana
+
+# ==========================================
+#  MAPEO DE CLASES (INGREDIENTES)
+# ==========================================
+CLASS_MAP = {
+    0: "tomato",
+    1: "lettuce",
+    2: "onion",
+    3: "pickles",
+    4: "pepper",
+    5: "bacon",
+    6: "ketchup",
+    7: "mayo",
+    8: "jalapeno"
+}
+
+# Colores distintos por clase para diferenciar visualmente
+CLASS_COLORS = {
+    0: "#FF4444",  # tomato   → rojo
+    1: "#0604A8",  # lettuce  → verde claro
+    2: "#FFFFFF",  # onion    → blanco
+    3: "#228B22",  # pickles  → verde oscuro
+    4: "#FA00AF",  # pepper   → naranja
+    5: "#8B0000",  # bacon    → rojo oscuro
+    6: "#FF0000",  # ketchup  → rojo brillante
+    7: "#FFFFAA",  # mayo     → amarillo claro
+    8: "#967FE7"   # jalapeno → verde lima
+}
 
 # Valores por defecto (se usarán si no existe el JSON)
 FIXED_LEFT = 1010 
@@ -59,6 +87,7 @@ class TrayEditor:
         self.current_rect = None
         self.start_x = None
         self.start_y = None
+        self.pending_rect = None  # Recuadro esperando asignación de clase
 
         # Configurar ventana sin bordes y SIEMPRE VISIBLE (TOPMOST)
         self.root.overrideredirect(True)
@@ -98,11 +127,11 @@ class TrayEditor:
         self.root.bind("q", lambda e: self.root.destroy()) # Salir sin guardar
         self.root.bind("<Escape>", lambda e: self.root.destroy()) # Salir
 
-        print("MODO EDICIÓN ACTIVO:")
-        print("1. Dibuja recuadros VERDES sobre cada ingrediente.")
-        print("2. Presiona 'Z' para borrar el último.")
-        print("3. Presiona 'S' para GUARDAR y salir.")
-        print("4. Presiona 'Q' para SALIR SIN GUARDAR.")
+        # Bindings para asignar clase (teclas 0-7)
+        for key in range(9):
+            self.root.bind(str(key), self.assign_class)
+
+        self._print_instructions()
         
         # 4. MOSTRAR LA VENTANA
         self.root.deiconify()
@@ -110,6 +139,21 @@ class TrayEditor:
         # Forzar que la ventana suba al frente
         self.root.lift()
         self.root.focus_force()
+
+    def _print_instructions(self):
+        print("\n" + "="*50)
+        print("  MODO EDICIÓN ACTIVO")
+        print("="*50)
+        print("\n  CLASES DISPONIBLES:")
+        for cid, name in CLASS_MAP.items():
+            print(f"    [{cid}] {name}")
+        print("\n  FLUJO:")
+        print("  1. Dibuja un recuadro (clic + arrastrar)")
+        print("  2. Presiona [0-7] para asignar la clase")
+        print("  3. Repite para cada bandeja")
+        print("")
+        print("  [Z] Deshacer último    [S] Guardar    [Q/ESC] Salir")
+        print("="*50 + "\n")
 
     def take_clean_screenshot(self):
         """Se asegura de que la pantalla esté limpia antes de capturar."""
@@ -121,17 +165,24 @@ class TrayEditor:
         self.photo_ref = ImageTk.PhotoImage(self.image_ref)
 
     def on_button_press(self, event):
+        # No permitir dibujar si hay un recuadro pendiente de clase
+        if self.pending_rect is not None:
+            print("⚠️  Primero asigna clase al recuadro actual (tecla 0-7)")
+            return
         self.start_x = event.x
         self.start_y = event.y
         self.current_rect = self.canvas.create_rectangle(
             self.start_x, self.start_y, self.start_x, self.start_y, 
-            outline="#00FF00", width=2
+            outline="#FFFF00", width=2, dash=(4, 4)  # Amarillo punteado = pendiente
         )
 
     def on_move_press(self, event):
-        self.canvas.coords(self.current_rect, self.start_x, self.start_y, event.x, event.y)
+        if self.current_rect:
+            self.canvas.coords(self.current_rect, self.start_x, self.start_y, event.x, event.y)
 
     def on_button_release(self, event):
+        if self.current_rect is None:
+            return
         end_x, end_y = (event.x, event.y)
         
         # Ordenar coordenadas
@@ -144,24 +195,93 @@ class TrayEditor:
             self.current_rect = None
             return
 
-        self.rectangles.append({'coords': [x1, y1, x2, y2], 'id': self.current_rect})
-        print(f"Bandeja registrada: {x1},{y1} - {x2},{y2}")
+        # Guardar como pendiente (esperando asignación de clase)
+        self.pending_rect = {
+            'coords': [x1, y1, x2, y2], 
+            'id': self.current_rect,
+            'class_id': None
+        }
         self.current_rect = None
+        print(f"📦 Recuadro dibujado: [{x1},{y1} - {x2},{y2}]  →  Presiona [0-7] para asignar clase")
+
+    def assign_class(self, event):
+        """Asigna clase al recuadro pendiente cuando se presiona 0-7."""
+        if self.pending_rect is None:
+            return  # No hay recuadro pendiente
+        
+        class_id = int(event.char)
+        class_name = CLASS_MAP.get(class_id, "???")
+        color = CLASS_COLORS.get(class_id, "#00FF00")
+        
+        # Actualizar el recuadro visual: color sólido de la clase
+        rect_id = self.pending_rect['id']
+        x1, y1, x2, y2 = self.pending_rect['coords']
+        self.canvas.delete(rect_id)
+        
+        new_rect_id = self.canvas.create_rectangle(
+            x1, y1, x2, y2, outline=color, width=2
+        )
+        
+        # Agregar label de texto
+        label_id = self.canvas.create_text(
+            x1 + 2, y1 + 2, 
+            text=f"{class_id}:{class_name}", 
+            anchor="nw", fill=color, 
+            font=("Arial", 8, "bold")
+        )
+        
+        # Registrar la bandeja con su clase
+        self.pending_rect['class_id'] = class_id
+        self.pending_rect['id'] = new_rect_id
+        self.pending_rect['label_id'] = label_id
+        self.rectangles.append(self.pending_rect)
+        self.pending_rect = None
+        
+        print(f"✅ Bandeja #{len(self.rectangles)} → Clase {class_id} ({class_name})")
 
     def undo_last(self, event):
+        # Si hay un recuadro pendiente, borrarlo primero
+        if self.pending_rect is not None:
+            self.canvas.delete(self.pending_rect['id'])
+            self.pending_rect = None
+            print("🗑️  Recuadro pendiente eliminado.")
+            return
+        
         if self.rectangles:
             last = self.rectangles.pop()
             self.canvas.delete(last['id'])
-            print("Última bandeja eliminada.")
+            if 'label_id' in last:
+                self.canvas.delete(last['label_id'])
+            class_name = CLASS_MAP.get(last['class_id'], '???')
+            print(f"🗑️  Eliminada bandeja {class_name} (clase {last['class_id']})")
 
     def save_config(self, event):
-        # Extraemos solo las coordenadas para el JSON
-        data = [r['coords'] for r in self.rectangles]
+        # Verificar que no haya recuadros pendientes sin clase
+        if self.pending_rect is not None:
+            print("⚠️  ¡Hay un recuadro sin clase asignada! Presiona [0-7] primero.")
+            return
+        
+        if not self.rectangles:
+            print("⚠️  No hay bandejas registradas. Dibuja al menos una.")
+            return
+        
+        # Formato: [[x1, y1, x2, y2, class_id], ...]
+        data = [r['coords'] + [r['class_id']] for r in self.rectangles]
         
         try:
             with open(CONFIG_FILE, 'w') as f:
-                json.dump(data, f)
-            print(f"\n¡ÉXITO! Se guardaron {len(data)} bandejas en '{CONFIG_FILE}'.")
+                json.dump(data, f, indent=2)
+            
+            print(f"\n{'='*50}")
+            print(f"  ¡ÉXITO! Se guardaron {len(data)} bandejas en '{CONFIG_FILE}'")
+            print(f"{'='*50}")
+            for i, r in enumerate(self.rectangles):
+                cid = r['class_id']
+                cname = CLASS_MAP.get(cid, '???')
+                coords = r['coords']
+                print(f"  Bandeja {i+1}: {cname} (clase {cid}) → {coords}")
+            print(f"{'='*50}\n")
+
             self.root.destroy()
         except Exception as e:
             print(f"Error al guardar: {e}")

@@ -9,7 +9,7 @@ import json  # <--- NUEVO: Para guardar el archivo
 # ==========================================
 #  CONFIGURACIÓN INICIAL
 # ==========================================
-SCREEN_BOX_SIZE = 400  # Tamaño del cuadro rojo
+SCREEN_BOX_SIZE = 700  # Tamaño del cuadro rojo
 
 # ==========================================
 #  FIX DPI

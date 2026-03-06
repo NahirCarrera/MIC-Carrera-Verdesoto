@@ -1,6 +1,6 @@
 {
-    "FIXED_LEFT": 1010,
-    "FIXED_TOP": 244,
-    "MAX_SHAKE": 31,
-    "SCREEN_BOX_SIZE": 400
+    "FIXED_LEFT": 138,
+    "FIXED_TOP": 209,
+    "MAX_SHAKE": 8,
+    "SCREEN_BOX_SIZE": 700
 }

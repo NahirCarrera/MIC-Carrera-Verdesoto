@@ -41,10 +41,23 @@ MANUAL_TRAYS = [
 ]
 
 OUTPUT_SIZE = 640
-CLASS_ID = 0 
+
+# Mapeo de clases (debe coincidir con labelling.py)
+CLASS_MAP = {
+    0: "tomato",
+    1: "lettuce",
+    2: "onion",
+    3: "pickles",
+    4: "pepper",
+    5: "bacon",
+    6: "ketchup",
+    7: "mayo",
+    8: "jalapeno"
+}
 
 # Teclas
-HOTKEY_CAPTURE = "alt+1"  # Captura con shake
+HOTKEY_CLEAN = "1"        # Captura LIMPIA (con etiquetas YOLO)
+HOTKEY_OBSTRUCTED = "2"   # Captura OBSTRUIDA (negative sample, sin etiquetas)
 HOTKEY_ADJUST = "alt+2"   # Ajustar Centro (WASD)
 HOTKEY_EXIT = "alt+esc"
 MOVE_STEP = 2 
@@ -53,7 +66,15 @@ MOVE_STEP = 2
 overlay_window = None 
 overlay_canvas = None 
 is_adjust_mode = False       
-wasd_hooks = []             
+wasd_hooks = []
+
+# Contadores de capturas
+count_clean = 0
+count_obstructed = 0
+
+# Ventana HUD (contador en pantalla)
+hud_window = None
+hud_label = None
 
 # ==========================================
 #  GESTIÓN DE CONFIGURACIÓN (JSON)
@@ -102,6 +123,28 @@ def get_trays_data():
         except: pass
     return MANUAL_TRAYS, False
 
+def count_existing_images():
+    """Escanea la carpeta de imágenes y cuenta cuántas clean/obstructed ya existen."""
+    global count_clean, count_obstructed
+    count_clean = 0
+    count_obstructed = 0
+    
+    if not os.path.exists(IMG_FOLDER):
+        return
+    
+    for fname in os.listdir(IMG_FOLDER):
+        if not fname.lower().endswith(('.png', '.jpg', '.jpeg')):
+            continue
+        if '_obstr_' in fname:
+            count_obstructed += 1
+        elif '_clean_' in fname:
+            count_clean += 1
+        else:
+            # Imágenes antiguas sin tag se cuentan como clean
+            count_clean += 1
+    
+    print(f"-> Imágenes existentes detectadas: {count_clean} clean, {count_obstructed} obstructed")
+
 # ==========================================
 #  INTERFAZ Y LÓGICA
 # ==========================================
@@ -127,6 +170,73 @@ def setup_overlay(window):
     draw_green_boxes(0, 0)
     window.withdraw()
 
+def setup_hud(parent):
+    """Crea una ventana HUD flotante con el contador en pantalla."""
+    global hud_window, hud_label
+    
+    hud_window = tk.Toplevel(parent)
+    hud_window.overrideredirect(True)
+    hud_window.wm_attributes("-topmost", True)
+    hud_window.wm_attributes("-alpha", 0.85)
+    hud_window.config(bg="#1a1a2e")
+    
+    # Posicionar arriba a la izquierda de la zona de captura
+    hud_x = FIXED_LEFT
+    hud_y = max(0, FIXED_TOP - 75)
+    hud_window.geometry(f"320x65+{hud_x}+{hud_y}")
+    
+    hud_label = tk.Label(
+        hud_window, 
+        text="", 
+        font=("Consolas", 10), 
+        fg="#00FF00", 
+        bg="#1a1a2e",
+        justify="left",
+        anchor="w"
+    )
+    hud_label.pack(fill="both", expand=True, padx=6, pady=4)
+    
+    update_hud()
+
+def update_hud():
+    """Actualiza el texto del HUD con los contadores actuales."""
+    if hud_label is None:
+        return
+    
+    total = count_clean + count_obstructed
+    if total == 0:
+        pct_clean = 0
+        pct_obstr = 0
+    else:
+        pct_clean = (count_clean / total) * 100
+        pct_obstr = (count_obstructed / total) * 100
+    
+    # Barra visual compacta
+    bar_len = 20
+    filled = int(bar_len * pct_clean / 100) if total > 0 else 0
+    bar = '█' * filled + '░' * (bar_len - filled)
+    
+    # Indicador de proporción
+    if total < 10:
+        status = "⏳"
+    elif 5 <= pct_obstr <= 20:
+        status = "✅"
+    else:
+        status = "⚠️"
+    
+    text = (
+        f"CLEAN: {count_clean:>4} ({pct_clean:4.1f}%)  │  TOTAL: {total}\n"
+        f"OBSTR: {count_obstructed:>4} ({pct_obstr:4.1f}%)  │  {status} Ratio\n"
+        f"[{bar}]"
+    )
+    
+    hud_label.config(text=text)
+    
+    # Reposicionar HUD por si se movió con WASD
+    hud_x = FIXED_LEFT
+    hud_y = max(0, FIXED_TOP - 75)
+    hud_window.geometry(f"320x65+{hud_x}+{hud_y}")
+
 def draw_green_boxes(offset_x, offset_y):
     overlay_canvas.delete("all_boxes")
     trays, from_json = get_trays_data()
@@ -134,8 +244,10 @@ def draw_green_boxes(offset_x, offset_y):
     if from_json: scale_factor = 1.0 
     else: scale_factor = SCREEN_BOX_SIZE / 320.0 
 
-    for coords in trays:
-        x1, y1, x2, y2 = coords
+    for entry in trays:
+        # Soporta formato nuevo [x1,y1,x2,y2,class_id] y antiguo [x1,y1,x2,y2]
+        x1, y1, x2, y2 = entry[0], entry[1], entry[2], entry[3]
+        
         sx1, sy1 = int(x1 * scale_factor), int(y1 * scale_factor)
         sx2, sy2 = int(x2 * scale_factor), int(y2 * scale_factor)
         
@@ -194,8 +306,15 @@ def generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y):
     scale_factor = 1.0 if from_json else (SCREEN_BOX_SIZE / 320.0)
     
     with open(path, 'w') as f:
-        for coords in trays:
-            x1, y1, x2, y2 = coords
+        for entry in trays:
+            # Nuevo formato: [x1, y1, x2, y2, class_id]
+            # Fallback al antiguo: [x1, y1, x2, y2] (clase 0)
+            if len(entry) >= 5:
+                x1, y1, x2, y2, class_id = entry[0], entry[1], entry[2], entry[3], entry[4]
+            else:
+                x1, y1, x2, y2 = entry[0], entry[1], entry[2], entry[3]
+                class_id = 0
+            
             sx1, sy1 = x1 * scale_factor, y1 * scale_factor
             sx2, sy2 = x2 * scale_factor, y2 * scale_factor
             
@@ -208,16 +327,47 @@ def generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y):
 
             w, h = final_x2 - final_x1, final_y2 - final_y1
             cx, cy = final_x1 + (w / 2), final_y1 + (h / 2)
-            f.write(f"{CLASS_ID} {cx/base_w:.6f} {cy/base_h:.6f} {w/base_w:.6f} {h/base_h:.6f}\n")
+            f.write(f"{class_id} {cx/base_w:.6f} {cy/base_h:.6f} {w/base_w:.6f} {h/base_h:.6f}\n")
 
-def take_capture():
+def print_counter_status():
+    """Imprime el estado actual de capturas con proporción."""
+    total = count_clean + count_obstructed
+    if total == 0:
+        pct_clean = 0
+        pct_obstr = 0
+    else:
+        pct_clean = (count_clean / total) * 100
+        pct_obstr = (count_obstructed / total) * 100
+    
+    bar_len = 30
+    filled = int(bar_len * pct_clean / 100) if total > 0 else 0
+    bar = '█' * filled + '░' * (bar_len - filled)
+    
+    print(f"\n  ┌───────────────────────────────────────────┐")
+    print(f"  │  CLEAN: {count_clean:>4}  ({pct_clean:5.1f}%)                  │")
+    print(f"  │  OBSTR: {count_obstructed:>4}  ({pct_obstr:5.1f}%)  │ Total: {total:<4} │")
+    print(f"  │  [{bar}]  │")
+    print(f"  └───────────────────────────────────────────┘")
+    
+    # Advertencia si la proporción se desbalancea
+    if total >= 10 and pct_obstr > 20:
+        print(f"  ⚠️  Muchas obstruidas ({pct_obstr:.0f}%). Recomendado: 10-15% del total.")
+    elif total >= 10 and pct_obstr < 5:
+        print(f"  ⚠️  Pocas obstruidas ({pct_obstr:.0f}%). Recomendado: 10-15% del total.")
+
+def take_capture(mode="clean"):
+    """
+    mode='clean'      -> Captura + etiquetas YOLO (tecla 1)
+    mode='obstructed'  -> Captura + .txt vacío / negative sample (tecla 2)
+    """
+    global count_clean, count_obstructed
     if is_adjust_mode: return 
 
     try:
         os.makedirs(IMG_FOLDER, exist_ok=True)
         os.makedirs(LABEL_FOLDER, exist_ok=True)
         
-        # 1. GENERAR POSICIÓN ALEATORIA
+        # 1. GENERAR POSICIÓN ALEATORIA (shake en ambos modos)
         shift_x = random.randint(-MAX_SHAKE, MAX_SHAKE)
         shift_y = random.randint(-MAX_SHAKE, MAX_SHAKE)
         
@@ -228,7 +378,8 @@ def take_capture():
         refresh_position(temp_left, temp_top)
         draw_green_boxes(shift_x, shift_y)
         
-        overlay_canvas.config(bg="cyan", highlightbackground="cyan")
+        fb_color = "cyan" if mode == "clean" else "red"
+        overlay_canvas.config(bg=fb_color, highlightbackground=fb_color)
         overlay_window.deiconify()
         overlay_window.update()
         time.sleep(0.15) 
@@ -242,16 +393,27 @@ def take_capture():
         img = ImageGrab.grab(bbox=bbox, all_screens=True)
         img_resized = img.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.Resampling.LANCZOS)
 
-        # 5. GUARDAR
+        # 5. GUARDAR IMAGEN
+        tag = "clean" if mode == "clean" else "obstr"
         timestamp = datetime.now().strftime("%d%m%y%H%M%S")
-        filename_base = f"img_{timestamp}_s{shift_x}_{shift_y}"
+        filename_base = f"img_{timestamp}_{tag}_s{shift_x}_{shift_y}"
         
         img_resized.save(os.path.join(IMG_FOLDER, filename_base + ".png"))
         
-        trays, from_json = get_trays_data()
-        generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y)
+        # 6. GUARDAR ETIQUETAS + ACTUALIZAR CONTADOR
+        if mode == "clean":
+            trays, from_json = get_trays_data()
+            generate_yolo_txt(filename_base, trays, from_json, shift_x, shift_y)
+            count_clean += 1
+            print(f"✅ Guardado: CLEAN (Bandeja válida) -> {filename_base} (Offset {shift_x},{shift_y})")
+        else:
+            empty_label_path = os.path.join(LABEL_FOLDER, filename_base + ".txt")
+            open(empty_label_path, 'w').close()
+            count_obstructed += 1
+            print(f"⛔ Guardado: OBSTRUCTED (Background Image) -> {filename_base} (Offset {shift_x},{shift_y})")
         
-        print(f"-> FOTO TOMADA: {filename_base} (Offset {shift_x},{shift_y})")
+        print_counter_status()
+        update_hud()
 
     except Exception as e:
         print(f"Error: {e}")
@@ -261,6 +423,9 @@ def exit_program():
     save_main_config() # Guardar antes de salir por seguridad
     unhook_wasd()
     keyboard.unhook_all()
+    if hud_window:
+        try: hud_window.destroy()
+        except: pass
     if overlay_window: overlay_window.destroy()
 
 def main():
@@ -269,17 +434,27 @@ def main():
     # Cargar configuración antes de iniciar la GUI
     load_main_config()
     
-    print("--- CAPTURA RÁPIDA YOLO (ONE-SHOT) ---")
+    print("--- CAPTURA YOLO (MANUAL: CLEAN / OBSTRUCTED) ---")
     print(f"Config cargada desde: {COORD_CONFIG_FILE}")
-    print(f"[{HOTKEY_CAPTURE}] CAPTURAR (Flash + Foto)")
-    print(f"[{HOTKEY_ADJUST}] AJUSTAR CENTRO (WASD)")
-    print(f"[{HOTKEY_EXIT}] SALIR")
+    print(f"")
+    print(f"  [{HOTKEY_CLEAN}]  CAPTURA CLEAN    (Bandeja válida + etiquetas YOLO)")
+    print(f"  [{HOTKEY_OBSTRUCTED}]  CAPTURA OBSTRUCTED (Negative sample, sin etiquetas)")
+    print(f"  [{HOTKEY_ADJUST}]  AJUSTAR CENTRO   (WASD para mover)")
+    print(f"  [{HOTKEY_EXIT}]  SALIR")
+    print(f"")
+    print(">>> Esperando input... <<<")
+    
+    # Contar imágenes existentes antes de empezar
+    count_existing_images()
+    print_counter_status()
     
     try:
         overlay_window = tk.Tk()
         setup_overlay(overlay_window)
+        setup_hud(overlay_window)
 
-        keyboard.add_hotkey(HOTKEY_CAPTURE, take_capture, suppress=True)
+        keyboard.add_hotkey(HOTKEY_CLEAN, lambda: take_capture("clean"), suppress=True)
+        keyboard.add_hotkey(HOTKEY_OBSTRUCTED, lambda: take_capture("obstructed"), suppress=True)
         keyboard.add_hotkey(HOTKEY_ADJUST, toggle_adjust_mode, suppress=True)
         keyboard.add_hotkey(HOTKEY_EXIT, exit_program, suppress=True)
 
